@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <script src="static/spotify-web-api.js"></script>
+        <title>BPM to Playlist</title>
+        <style>
+            body {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                margin: 0;
+                background-color: rgb(17 24 39);
+            }
+            .spinner {
+                border: 4px solid rgba(0, 0, 0, 0.3);
+                border-top: 4px solid #3498db;
+                border-radius: 50%;
+                width: 50px;
+                height: 50px;
+                animation: spin 1s linear infinite;
+            }
+            @keyframes spin {
+                0% {
+                    transform: rotate(0deg);
+                }
+                100% {
+                    transform: rotate(360deg);
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="spinner"></div>
+        <script>
+            function createPlaylist(access_token) {
+                var spotifyApi = new SpotifyWebApi();
+                spotifyApi.setAccessToken(access_token);
+                
+                spotifyApi.getUserPlaylists({ limit: 50 }, function (err, data) {
+                    if (err) alert(err);
+                    else {
+                        playlist_ids = [];
+                        data.items.forEach(i => playlist_ids.push(i.id));
+                        promise_pool = [];
+                        playlist_ids.forEach(id => {
+                            promise_pool.push(spotifyApi.getPlaylistTracks(id, { limit: 50 }));
+                        });
+                        Promise.all(promise_pool).then(values => {
+                            promise_pool = [];
+                            values.forEach(v => {
+                                track_ids = [];
+                                v.items.forEach(i => {
+                                    if (i.track != null)
+                                        track_ids.push(i.track.id);
+                                });
+                                promise_pool.push(spotifyApi.getAudioFeaturesForTracks(track_ids));
+                            });
+                            bpm_track_ids = []
+                            start_bpm = localStorage.getItem('start');
+                            end_bpm = localStorage.getItem('end');
+                            Promise.all(promise_pool).then(values => {
+                                values.forEach(v => {
+                                    v.audio_features.forEach(f => {
+                                        if (f != null && Math.round(f.tempo) >= start_bpm && Math.round(f.tempo) <= end_bpm) bpm_track_ids.push('spotify:track:' + f.id);
+                                    });
+                                });
+                                spotifyApi.getMe().then(me => {
+                                    spotifyApi.createPlaylist(me.id, {name: start_bpm + " to " + end_bpm + "(" + Math.floor(Math.random() * 9999) + ")"}).then(p => {
+                                        spotifyApi.addTracksToPlaylist(p.id, bpm_track_ids.slice(0, 100)).then(s => window.location.replace("https://open.spotify.com/playlist/" + p.id));
+                                    });
+                                });
+                            });
+                        });
+                    }
+                });
+            }
+
+            const urlParams = new URLSearchParams(window.location.search);
+            let code = urlParams.get('code');
+            let codeVerifier = localStorage.getItem('code_verifier');
+
+            let body = new URLSearchParams({
+                grant_type: 'authorization_code',
+                code: code,
+                redirect_uri: '{{ callback_url }}',
+                client_id: '{{ client_id }}',
+                code_verifier: codeVerifier
+            });
+
+            const response = fetch('https://accounts.spotify.com/api/token', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: body
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('HTTP status ' + response.status);
+                }
+                return response.json();
+            })
+            .then(data => {
+                createPlaylist(data.access_token);
+            })
+            .catch(error => {
+                console.error('Error:', error); 
+            });
+        </script>
+    </body>
+</html>

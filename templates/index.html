@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Bpm to Playlist</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+
+<body class="bg-gray-900 text-white font-sans flex items-center justify-center h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <div class="max-w-xl mx-auto text-center">
+            <div class="mb-6">
+                <h1 class="text-3xl font-semibold inline-block ml-2">Bpm to Playlist</h1>
+            </div>
+            <p class="text-lg mb-6">
+                Select a BPM range, and we will create a new playlist for you! We will choose from your favorite and
+                playlisted songs.
+            </p>
+            <div class="mb-4">
+                <label for="bpmStart" class="block mb-2">Start BPM:</label>
+                <input type="number" id="bpmStart" name="bpmStart" min="60" max="200" step="5"
+                    class="bg-gray-800 text-white w-20 py-2 px-4 rounded-lg">
+            </div>
+            <div class="mb-6">
+                <label for="bpmEnd" class="block mb-2">End BPM:</label>
+                <input type="number" id="bpmEnd" name="bpmEnd" min="60" max="200" step="5"
+                    class="bg-gray-800 text-white w-20 py-2 px-4 rounded-lg">
+            </div>
+            <button id="spotifyLoginGenerateBtn"
+                class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">
+                Login with Spotify and Generate Playlist
+            </button>
+        </div>
+    </div>
+    <script>
+        function generateRandomString(length) {
+            let text = '';
+            let possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+
+            for (let i = 0; i < length; i++) {
+                text += possible.charAt(Math.floor(Math.random() * possible.length));
+            }
+            return text;
+        }
+
+        async function generateCodeChallenge(codeVerifier) {
+            function base64encode(string) {
+                return btoa(String.fromCharCode.apply(null, new Uint8Array(string)))
+                    .replace(/\+/g, '-')
+                    .replace(/\//g, '_')
+                    .replace(/=+$/, '');
+            }
+
+            const encoder = new TextEncoder();
+            const data = encoder.encode(codeVerifier);
+            const digest = await window.crypto.subtle.digest('SHA-256', data);
+    
+            return base64encode(digest);
+        }
+            
+        function spotifyLogin() {
+            const clientId = '{{ client_id }}';
+            const redirectUri = '{{ callback_url }}';
+            let codeVerifier = generateRandomString(128);
+            generateCodeChallenge(codeVerifier).then(codeChallenge => {
+                let state = generateRandomString(16);
+                let scope = 'playlist-read-private playlist-modify-public playlist-modify-private user-read-private user-read-email';
+                localStorage.setItem('code_verifier', codeVerifier);
+                let args = new URLSearchParams({
+                    response_type: 'code',
+                    client_id: clientId,
+                    scope: scope,
+                    redirect_uri: redirectUri,
+                    state: state,
+                    code_challenge_method: 'S256',
+                    code_challenge: codeChallenge
+                  });
+                window.location = 'https://accounts.spotify.com/authorize?' + args;
+            });
+        }
+
+        // 
+        document.addEventListener("DOMContentLoaded", function(){
+            document.getElementById('bpmStart').value = localStorage.getItem('start');
+            document.getElementById('bpmEnd').value = localStorage.getItem('end');
+        });
+        document.getElementById('spotifyLoginGenerateBtn').addEventListener('click', function () {
+            const startBPM = document.getElementById('bpmStart').value;
+            const endBPM = document.getElementById('bpmEnd').value;
+            localStorage.setItem('start', startBPM);
+            localStorage.setItem('end', endBPM);
+
+            spotifyLogin();
+        });
+    </script>
+</body>
+
+</html>
+
